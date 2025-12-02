@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>نظام المخزون - V13 (API Sync)</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+    <style>
+        :root {
+            --primary: #2563eb;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --bg-body: #f8fafc;
+            --bg-card: #ffffff;
+            --text-main: #1e293b;
+            --text-light: #64748b;
+            --radius: 10px;
+        }
+
+        * { box-sizing: border-box; outline: none; }
+        
+        body {
+            font-family: 'Cairo', sans-serif; margin: 0; background-color: var(--bg-body);
+            color: var(--text-main); padding-bottom: 80px;
+        }
+
+        /* --- الهيدر وحالة المزامنة --- */
+        header {
+            background: var(--bg-card); padding: 15px 20px;
+            display: flex; justify-content: space-between; align-items: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05); position: sticky; top: 0; z-index: 50;
+        }
+        .brand { font-size: 1.1rem; font-weight: 700; color: var(--primary); display: flex; align-items: center; gap: 8px; }
+        
+        .sync-badge {
+            font-size: 0.8rem; padding: 5px 12px; border-radius: 20px;
+            background: #f1f5f9; display: flex; align-items: center; gap: 5px;
+            transition: 0.3s; font-weight: 600;
+        }
+        .sync-badge.syncing { color: var(--primary); background: #eff6ff; }
+        .sync-badge.synced { color: var(--success); background: #dcfce7; }
+        .sync-badge.error { color: var(--danger); background: #fee2e2; }
+        
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .icon-spin { animation: spin 1s linear infinite; display: inline-block; }
+
+        /* --- القوائم --- */
+        .tabs-wrapper { background: var(--bg-card); padding: 10px; margin-bottom: 20px; }
+        .tabs { display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; }
+        .nav-item {
+            padding: 8px 16px; border-radius: 20px; background: #f1f5f9;
+            color: var(--text-light); font-weight: 600; border: none; cursor: pointer; white-space: nowrap; transition: 0.3s;
+        }
+        .nav-item.active { background: var(--primary); color: white; }
+
+        /* --- الحاويات --- */
+        .container { max-width: 1000px; margin: 0 auto; padding: 0 15px; }
+        .card {
+            background: var(--bg-card); border-radius: var(--radius); padding: 20px;
+            margin-bottom: 20px; border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+        }
+        h3 { margin-top: 0; font-size: 1.1rem; border-right: 4px solid var(--primary); padding-right: 10px; }
+
+        /* --- النماذج --- */
+        .grid-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-size: 0.9rem; font-weight: 600; color: var(--text-light); }
+        input, select { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: 'Cairo'; font-size: 0.95rem; }
+        input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+
+        /* --- الأزرار --- */
+        .btn {
+            width: 100%; padding: 12px; border: none; border-radius: 8px; font-family: 'Cairo'; font-weight: 700; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px;
+        }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-outline { background: white; border: 1px solid #cbd5e1; color: var(--text-main); }
+        .btn-dark { background: #334155; color: white; }
+
+        /* --- تبديل الطباعة --- */
+        .toggle-container { display: flex; background: #f1f5f9; padding: 5px; border-radius: 8px; margin-bottom: 15px; }
+        .toggle-btn { flex: 1; padding: 8px; text-align: center; cursor: pointer; border-radius: 6px; font-weight: 600; font-size: 0.9rem; transition: 0.3s; }
+        .toggle-btn.active { background: white; color: var(--primary); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+
+        /* --- شبكة الكيو آر --- */
+        .qr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 15px; margin-top: 25px; }
+        .qr-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; text-align: center; height: 180px; }
+        .qr-image-area img { max-width: 100%; max-height: 100px; }
+        .qr-details { font-size: 0.8rem; background: #f8fafc; width: 100%; padding: 5px; border-radius: 4px; margin-top: 5px; }
+        .qr-serial { font-family: monospace; color: var(--text-light); display: block; }
+
+        /* --- الجداول --- */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 10px; text-align: right; border-bottom: 1px solid #e2e8f0; }
+        th { background: #f8fafc; font-size: 0.9rem; }
+        .badge { padding: 3px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; }
+
+        /* --- الإشعارات --- */
+        #toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 2000; width: 90%; max-width: 400px; }
+        .toast { padding: 12px 20px; border-radius: 12px; color: white; margin-bottom: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: flex; align-items: center; gap: 10px; animation: slideDown 0.3s ease-out; font-weight: 600; font-size: 0.95rem; }
+        .toast.success { background: var(--success); } .toast.error { background: var(--danger); } .toast.warning { background: var(--warning); color: #fff; }
+        @keyframes slideDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        /* --- نافذة التحذير --- */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 3000; display: none; justify-content: center; align-items: center; }
+        .modal-box { background: white; width: 90%; max-width: 350px; border-radius: 12px; padding: 25px; text-align: center; animation: popIn 0.3s; }
+        @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+
+        @media print {
+            body * { visibility: hidden; }
+            #print-area, #print-area * { visibility: visible; }
+            #print-area { position: absolute; left: 0; top: 0; width: 100%; }
+            .qr-grid { display: grid !important; grid-template-columns: repeat(var(--print-cols), 1fr) !important; gap: 5px !important; }
+            .qr-card { border: 1px dashed #ccc; box-shadow: none; break-inside: avoid; height: auto; }
+            .no-print { display: none !important; }
+        }
+
+        .hidden { display: none; }
+        #reader { width: 100%; border-radius: 10px; overflow: hidden; display: none; margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+
+<div id="toast-container"></div>
+
+<!-- Modal -->
+<div id="confirmModal" class="modal-overlay">
+    <div class="modal-box">
+        <span style="font-size:3rem;">⚠️</span>
+        <div id="modalTitle" style="font-weight:700; font-size:1.1rem; margin:10px 0;">تنبيه</div>
+        <div id="modalDesc" style="color:var(--text-light);">هل أنت متأكد؟</div>
+        <div class="modal-actions">
+            <button id="btnConfirmYes" class="btn btn-primary">نعم</button>
+            <button onclick="document.getElementById('confirmModal').style.display='none'" class="btn btn-outline">إلغاء</button>
+        </div>
+    </div>
+</div>
+
+<header>
+    <div class="brand">📦 المخزن الذكي <span style="font-size:0.7em; color:#999;">V13</span></div>
+    
+    <!-- حالة المزامنة -->
+    <div id="syncBadge" class="sync-badge">
+        <span id="syncIcon">☁️</span> <span id="syncText">جاهز</span>
+    </div>
+</header>
+
+<div class="tabs-wrapper">
+    <div class="tabs">
+        <button onclick="nav('dashboard')" class="nav-item active" id="btn-dashboard">📊 اللوحة</button>
+        <button onclick="nav('products')" class="nav-item" id="btn-products">📦 المنتجات</button>
+        <button onclick="nav('print')" class="nav-item" id="btn-print">🖨️ طباعة QR</button>
+        <button onclick="nav('scan')" class="nav-item" id="btn-scan">📷 المسح</button>
+        <button onclick="nav('settings')" class="nav-item" id="btn-settings">⚙️ الإعدادات والمزامنة</button>
+    </div>
+</div>
+
+<div class="container">
+
+    <!-- 1. المنتجات -->
+    <section id="products" class="hidden">
+        <div class="card">
+            <h3>إضافة تصنيف</h3>
+            <div class="grid-form">
+                <input type="text" id="catName" placeholder="الاسم">
+                <input type="text" id="catCode" placeholder="الكود (01)">
+            </div>
+            <button onclick="App.tryAddCat()" class="btn btn-primary">حفظ التصنيف</button>
+        </div>
+        <div class="card">
+            <h3>إضافة منتج</h3>
+            <div class="grid-form">
+                <select id="selCat"></select>
+                <input type="text" id="prodName" placeholder="اسم المنتج">
+                <input type="text" id="prodCode" placeholder="كود المنتج">
+            </div>
+            <button onclick="App.tryAddProd()" class="btn btn-primary">حفظ المنتج</button>
+        </div>
+    </section>
+
+    <!-- 2. الطباعة -->
+    <section id="print" class="hidden">
+        <div class="card no-print">
+            <h3>إعدادات الملصقات</h3>
+            <div class="toggle-container">
+                <div onclick="App.setPrintMode('new')" id="tab-new" class="toggle-btn active">✨ توليد جديد</div>
+                <div onclick="App.setPrintMode('reprint')" id="tab-reprint" class="toggle-btn">🔄 إعادة طباعة</div>
+            </div>
+            <div class="grid-form">
+                <div><label>المنتج</label><select id="selProdQR"></select></div>
+                <div><label id="lblQty">الكمية</label><input type="number" id="qty" value="10" min="1"></div>
+                <div><label>الأعمدة</label><input type="number" id="printCols" value="5" min="2" max="8"></div>
+            </div>
+            <button onclick="App.tryGenerateQR()" class="btn btn-success">توليد الملصقات</button>
+        </div>
+        <div id="print-area" style="display:none;">
+            <div class="no-print" style="margin-bottom:15px; display:flex; gap:10px;">
+                <button onclick="window.print()" class="btn btn-primary" style="width:auto;">🖨️ طباعة</button>
+                <button onclick="document.getElementById('print-area').style.display='none'" class="btn btn-danger" style="width:auto;">إغلاق</button>
+            </div>
+            <div id="grid" class="qr-grid"></div>
+        </div>
+    </section>
+
+    <!-- 3. المسح -->
+    <section id="scan" class="hidden">
+        <div class="card">
+            <div style="display:flex; gap:10px; margin-bottom:20px;">
+                <button onclick="App.startScan('in')" class="btn btn-success">📥 وارد</button>
+                <button onclick="App.startScan('out')" class="btn btn-danger">📤 منصرف</button>
+            </div>
+            <h4 id="scanTitle" style="text-align:center; color:#666;">اختر العملية..</h4>
+            <div id="reader"></div>
+            <input type="text" id="manualInput" placeholder="أو اكتب الكود يدوياً" onchange="App.handleScan(this.value)">
+            <button onclick="App.stopScan()" class="btn btn-outline" style="margin-top:10px;">إيقاف</button>
+        </div>
+    </section>
+
+    <!-- 4. الإعدادات والمزامنة (NEW) -->
+    <section id="settings" class="hidden">
+        <div class="card">
+            <h3>إعدادات السيرفر (API)</h3>
+            <p style="color:var(--text-light); font-size:0.9rem;">أدخل رابط الـ API لتمكين المزامنة السحابية.</p>
+            <div class="grid-form">
+                <input type="text" id="apiUrl" placeholder="https://api.example.com/inventory" style="grid-column: span 2;">
+            </div>
+            <div class="grid-form">
+                <button onclick="App.uploadData()" class="btn btn-primary">📤 رفع البيانات للسيرفر</button>
+                <button onclick="App.downloadData()" class="btn btn-dark">📥 جلب البيانات من السيرفر</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>إدارة البيانات المحلية</h3>
+            <div class="grid-form">
+                <button onclick="App.exportData()" class="btn btn-outline">حفظ ملف (Backup JSON)</button>
+                <button onclick="App.tryClearData()" class="btn btn-danger">🗑️ حذف البيانات المحلية</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- 5. اللوحة -->
+    <section id="dashboard">
+        <div class="card">
+            <h3>المخزون</h3>
+            <div style="overflow-x:auto;">
+                <table id="stockTable">
+                    <thead><tr><th>المنتج</th><th>وارد</th><th>منصرف</th><th>باقي</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+</div>
+
+<script>
+const App = {
+    db: { cats: [], prods: [], items: [], moves: [], seq: 0 },
+    apiUrl: '',
+    scanner: null,
+    mode: null,
+    printMode: 'new',
+
+    init() {
+        const saved = localStorage.getItem('InvV13');
+        const savedUrl = localStorage.getItem('InvApiUrl');
+        
+        if (saved) this.db = JSON.parse(saved);
+        if (savedUrl) {
+            this.apiUrl = savedUrl;
+            document.getElementById('apiUrl').value = savedUrl;
+        }
+
+        this.renderUI();
+        nav('dashboard');
+        
+        // محاولة المزامنة عند الفتح إذا كان هناك رابط
+        if(navigator.onLine && this.apiUrl) this.syncStatus('synced');
+    },
+
+    save() {
+        localStorage.setItem('InvV13', JSON.stringify(this.db));
+        this.renderUI();
+        // محاولة رفع البيانات تلقائياً في الخلفية
+        if(this.apiUrl) this.uploadData(true); 
+    },
+
+    // --- منطق المزامنة (API Sync) ---
+    
+    updateApiUrl() {
+        const url = document.getElementById('apiUrl').value.trim();
+        this.apiUrl = url;
+        localStorage.setItem('InvApiUrl', url);
+    },
+
+    syncStatus(status) {
+        const badge = document.getElementById('syncBadge');
+        const icon = document.getElementById('syncIcon');
+        const text = document.getElementById('syncText');
+        
+        badge.className = 'sync-badge ' + status;
+        
+        if (status === 'syncing') {
+            icon.className = 'icon-spin'; icon.innerText = '⏳'; text.innerText = 'جاري المزامنة...';
+        } else if (status === 'synced') {
+            icon.className = ''; icon.innerText = '✅'; text.innerText = 'تمت المزامنة';
+        } else if (status === 'error') {
+            icon.className = ''; icon.innerText = '❌'; text.innerText = 'فشل الاتصال';
+        } else {
+            icon.className = ''; icon.innerText = '☁️'; text.innerText = 'غير متصل';
+        }
+    },
+
+    async uploadData(silent = false) {
+        this.updateApiUrl();
+        if (!this.apiUrl) return !silent && this.notify('الرجاء إدخال رابط API', 'error');
+        if (!navigator.onLine) return !silent && this.notify('لا يوجد انترنت', 'error');
+
+        this.syncStatus('syncing');
+        try {
+            // محاكاة الاتصال (عليك استبدال هذا بـ fetch حقيقي)
+            // const res = await fetch(this.apiUrl, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(this.db) });
+            // if (!res.ok) throw new Error('API Error');
+            
+            // في هذا المثال سنقوم بمحاكاة نجاح الاتصال بعد ثانية
+            await new Promise(r => setTimeout(r, 1000));
+            console.log("Data Uploaded to:", this.apiUrl, this.db);
+
+            this.syncStatus('synced');
+            if(!silent) this.notify('تم رفع البيانات للسيرفر بنجاح', 'success');
+        } catch (e) {
+            console.error(e);
+            this.syncStatus('error');
+            if(!silent) this.notify('فشل الاتصال بالسيرفر', 'error');
+        }
+    },
+
+    async downloadData() {
+        this.updateApiUrl();
+        if (!this.apiUrl) return this.notify('الرجاء إدخال رابط API', 'error');
+        
+        this.confirm('جلب البيانات', 'سيتم استبدال البيانات المحلية بالبيانات الموجودة في السيرفر. هل أنت متأكد؟', async () => {
+            this.syncStatus('syncing');
+            try {
+                // محاكاة الاتصال
+                // const res = await fetch(this.apiUrl);
+                // const data = await res.json();
+                
+                // محاكاة فشل لأننا لا نملك سيرفر حقيقي في هذا الكود
+                // throw new Error("Server not implemented in demo"); 
+                
+                await new Promise(r => setTimeout(r, 1000));
+                // this.db = data; // Uncomment when real API is used
+                
+                this.syncStatus('synced');
+                this.save();
+                this.notify('تم تحديث البيانات من السيرفر (محاكاة)', 'success');
+            } catch (e) {
+                this.syncStatus('error');
+                this.notify('فشل جلب البيانات', 'error');
+            }
+        });
+    },
+
+    // --- الإشعارات والتحذير ---
+    notify(msg, type = 'success') {
+        const c = document.getElementById('toast-container');
+        const el = document.createElement('div'); el.className = `toast ${type}`;
+        el.innerHTML = `<span>${type=='error'?'⛔':(type=='warning'?'⚠️':'✅')}</span><span>${msg}</span>`;
+        c.appendChild(el);
+        setTimeout(() => { el.style.animation='slideDown 0.3s reverse forwards'; setTimeout(()=>el.remove(),300); }, 3000);
+    },
+    confirm(title, desc, cb) {
+        document.getElementById('modalTitle').innerText = title;
+        document.getElementById('modalDesc').innerText = desc;
+        const m = document.getElementById('confirmModal'); m.style.display='flex';
+        const y = document.getElementById('btnConfirmYes');
+        const n = y.cloneNode(true); y.parentNode.replaceChild(n, y);
+        n.onclick = () => { m.style.display='none'; cb(); };
+    },
+
+    // --- الوظائف الأساسية ---
+    tryAddCat() {
+        const n = id('catName').value, c = id('catCode').value;
+        if (!n || !c) return this.notify('بيانات ناقصة', 'error');
+        this.db.cats.push({ id: Date.now(), name: n, code: c });
+        this.save(); id('catName').value=''; id('catCode').value=''; this.notify('تم الحفظ');
+    },
+    tryAddProd() {
+        const ci = id('selCat').value, n = id('prodName').value, c = id('prodCode').value;
+        if (!n || !c || !ci) return this.notify('بيانات ناقصة', 'error');
+        this.db.prods.push({ id: Date.now(), catId: ci, name: n, code: c });
+        this.save(); id('prodName').value=''; id('prodCode').value=''; this.notify('تم الحفظ');
+    },
+    tryClearData() {
+        this.confirm('حذف البيانات', 'هل أنت متأكد؟ لا يمكن التراجع.', () => {
+            localStorage.removeItem('InvV13'); location.reload();
+        });
+    },
+
+    // --- الطباعة ---
+    setPrintMode(m) {
+        this.printMode = m;
+        id('tab-new').className = `toggle-btn ${m=='new'?'active':''}`;
+        id('tab-reprint').className = `toggle-btn ${m=='reprint'?'active':''}`;
+        id('lblQty').innerText = m=='new' ? 'الكمية' : 'عدد الأكواد (الأخيرة)';
+    },
+    tryGenerateQR() {
+        const pid = id('selProdQR').value, qty = parseInt(id('qty').value);
+        if (!pid) return this.notify('اختر المنتج', 'error');
+        
+        const action = () => {
+            document.documentElement.style.setProperty('--print-cols', id('printCols').value);
+            const p = this.db.prods.find(x => x.id == pid);
+            const c = this.db.cats.find(x => x.id == p.catId);
+            const g = id('grid'); g.innerHTML = '';
+            id('print-area').style.display = 'block';
+
+            let itemsToPrint = [];
+
+            if (this.printMode === 'new') {
+                for (let i = 0; i < qty; i++) {
+                    this.db.seq++;
+                    const sn = `${c.code}-${p.code}-${this.db.seq}`;
+                    this.db.items.push({ serial: sn, prodId: pid });
+                    itemsToPrint.push({ sn, n: p.name });
+                }
+                this.save(); // Save new items
+            } else {
+                // Reprint Mode
+                const existing = this.db.items.filter(x => x.prodId == pid);
+                if(existing.length === 0) return this.notify('لا توجد أكواد سابقة', 'error');
+                itemsToPrint = existing.slice(-qty).map(x => ({ sn: x.serial, n: p.name }));
+            }
+
+            // Render
+            let tasks = [];
+            itemsToPrint.forEach(itm => {
+                const card = document.createElement('div'); card.className='qr-card';
+                const box = document.createElement('div'); box.className='qr-image-area';
+                card.innerHTML = `<div class="qr-details"><strong>${itm.n}</strong><span class="qr-serial">${itm.sn}</span></div>`;
+                card.prepend(box); g.appendChild(card);
+                tasks.push({ el: box, txt: itm.sn });
+            });
+
+            setTimeout(() => {
+                tasks.forEach(t => new QRCode(t.el, { text: t.txt, width: 100, height: 100 }));
+                window.scrollTo(0, document.body.scrollHeight);
+            }, 150);
+            this.notify(`تم تجهيز ${itemsToPrint.length} ملصق`, 'success');
+        };
+
+        if (this.printMode === 'new' && qty > 50) this.confirm('كمية كبيرة', `توليد ${qty} كود؟`, action);
+        else action();
+    },
+
+    // --- المسح ---
+    startScan(m) {
+        this.mode=m; id('scanTitle').innerText = m=='in'?'وارد':'منصرف';
+        id('reader').style.display='block';
+        if(!this.scanner) this.scanner = new Html5Qrcode("reader");
+        this.scanner.start({facingMode:"environment"}, {fps:10}, t=>this.handleScan(t));
+    },
+    stopScan() { if(this.scanner) this.scanner.stop().then(()=>id('reader').style.display='none'); },
+    handleScan(t) {
+        t=t.trim(); if(!t) return;
+        const itm = this.db.items.find(i=>i.serial===t);
+        if(!itm) return this.notify('كود غير موجود', 'error');
+        
+        const p = this.db.prods.find(x=>x.id==itm.prodId);
+        const hasIn = this.db.moves.some(m=>m.serial===t && m.type=='in');
+        const hasOut = this.db.moves.some(m=>m.serial===t && m.type=='out');
+
+        if(this.mode=='in') {
+            if(hasIn) this.notify('مكرر', 'warning');
+            else { this.db.moves.push({serial:t, type:'in', date:new Date()}); this.notify(`✅ ${p.name}`); }
+        } else {
+            if(!hasIn) this.notify('غير موجود بالمخزن', 'error');
+            else if(hasOut) this.notify('مباع مسبقاً', 'warning');
+            else { this.db.moves.push({serial:t, type:'out', date:new Date()}); this.notify(`✅ تم صرف ${p.name}`); }
+        }
+        this.save(); id('manualInput').value='';
+    },
+
+    // --- UI ---
+    renderUI() {
+        const fill = (eid, arr) => id(eid).innerHTML = '<option value="">-- اختر --</option>' + arr.map(x=>`<option value="${x.id}">${x.name}</option>`);
+        fill('selCat', this.db.cats); fill('selProdQR', this.db.prods);
+
+        id('stockTable').querySelector('tbody').innerHTML = this.db.prods.map(p => {
+            const sn = this.db.items.filter(i=>i.prodId==p.id).map(i=>i.serial);
+            const i = this.db.moves.filter(m=>m.type=='in'&&sn.includes(m.serial)).length;
+            const o = this.db.moves.filter(m=>m.type=='out'&&sn.includes(m.serial)).length;
+            return `<tr><td>${p.name}</td><td><span class="badge" style="background:#dcfce7;color:green">${i}</span></td><td><span class="badge" style="background:#fee2e2;color:red">${o}</span></td><td><b>${i-o}</b></td></tr>`;
+        }).join('');
+    },
+    exportData() {
+        const a = document.createElement("a");
+        a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.db));
+        a.download = "inv.json"; a.click();
+    }
+};
+
+const id = i => document.getElementById(i);
+const nav = s => {
+    document.querySelectorAll('section').forEach(x => x.classList.add('hidden'));
+    id(s).classList.remove('hidden');
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+    id('btn-' + s).classList.add('active');
+    if(s !== 'scan') App.stopScan();
+};
+
+window.onload = () => App.init();
+</script>
+</body>
+</html>
