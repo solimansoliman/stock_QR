@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>نظام المخزون - V23 (Sync)</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+    <style>
+        :root {
+            --primary: #2563eb;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --bg-body: #f8fafc;
+            --bg-card: #ffffff;
+            --text-main: #1e293b;
+            --radius: 12px;
+        }
+
+        * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; }
+        
+        body {
+            font-family: 'Cairo', sans-serif; margin: 0; background-color: var(--bg-body);
+            color: var(--text-main); padding-bottom: 90px;
+        }
+
+        /* --- مؤشر حالة الاتصال --- */
+        .conn-badge {
+            font-size: 0.75rem; padding: 4px 10px; border-radius: 20px;
+            font-weight: bold; display: flex; align-items: center; gap: 5px;
+            transition: 0.3s;
+        }
+        .status-online { background: #dcfce7; color: #166534; }
+        .status-offline { background: #fee2e2; color: #991b1b; }
+        .status-syncing { background: #fef3c7; color: #92400e; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+
+        /* --- الهيدر --- */
+        header {
+            background: white; padding: 15px; position: sticky; top: 0; z-index: 100;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center;
+        }
+        .user-badge { font-size: 0.8rem; background: #e0f2fe; color: #0369a1; padding: 5px 12px; border-radius: 20px; font-weight: bold; cursor: pointer; }
+
+        /* --- القوائم --- */
+        .tabs-wrapper { padding: 10px; background: white; overflow-x: auto; white-space: nowrap; margin-bottom: 15px; border-bottom: 1px solid #e2e8f0; }
+        .nav-item {
+            display: inline-block; padding: 8px 16px; background: #f1f5f9; border-radius: 20px;
+            margin-left: 5px; cursor: pointer; color: #64748b; font-weight: 600; font-size: 0.9rem; transition: 0.2s;
+        }
+        .nav-item.active { background: var(--primary); color: white; }
+
+        /* --- المحتوى --- */
+        .container { max-width: 900px; margin: 0 auto; padding: 0 10px; }
+        .card { background: white; padding: 15px; border-radius: var(--radius); margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); border: 1px solid #e2e8f0; }
+        h3 { margin-top: 0; color: var(--primary); border-bottom: 1px solid #eee; padding-bottom: 10px; font-size: 1.1rem; }
+
+        /* --- الجداول --- */
+        .table-responsive { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; min-width: 500px; }
+        th { background: #f8fafc; padding: 10px; text-align: right; font-weight: 700; color: #475569; }
+        td { padding: 10px; border-bottom: 1px solid #e2e8f0; }
+        .badge { padding: 3px 8px; border-radius: 5px; font-weight: bold; font-size: 0.8rem; }
+        
+        /* --- النماذج --- */
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 15px; }
+        input, select { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: 'Cairo'; }
+        
+        .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; color: white; font-weight: bold; cursor: pointer; font-family: 'Cairo'; transition: 0.2s; }
+        .btn-primary { background: var(--primary); }
+        .btn-success { background: var(--success); }
+        .btn-danger { background: var(--danger); }
+        .btn-outline { background: white; border: 1px solid #cbd5e1; color: #333; }
+
+        /* --- الإشعارات --- */
+        #toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; width: 90%; max-width: 400px; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+        .toast { pointer-events: auto; background: white; padding: 12px 15px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); display: flex; align-items: center; gap: 12px; animation: slideIn 0.3s; border-right: 5px solid transparent; font-size: 0.95rem; font-weight: 600; }
+        .toast.success { border-right-color: var(--success); color: #065f46; }
+        .toast.error { border-right-color: var(--danger); color: #991b1b; }
+        .toast.warning { border-right-color: var(--warning); color: #92400e; }
+        .toast.info { border-right-color: #3b82f6; color: #1e40af; }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* --- شاشة الدخول --- */
+        #loginOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #1e3a8a, var(--primary)); z-index: 4000; display: flex; justify-content: center; align-items: center; }
+        .login-card { background: white; width: 85%; max-width: 350px; padding: 30px; border-radius: 20px; text-align: center; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2); }
+        .login-input { width: 100%; padding: 12px; margin: 8px 0; border: 2px solid #e2e8f0; border-radius: 10px; font-family: 'Cairo'; text-align: center; font-size: 1rem; }
+
+        /* --- QR & Print --- */
+        .toggle-container { display: flex; background: #f1f5f9; padding: 5px; border-radius: 10px; margin-bottom: 15px; }
+        .toggle-btn { flex: 1; padding: 8px; text-align: center; cursor: pointer; border-radius: 8px; font-weight: 600; font-size: 0.9rem; color: #64748b; }
+        .toggle-btn.active { background: white; color: var(--primary); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .qr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-top: 15px; }
+        .qr-card { border: 1px solid #e2e8f0; padding: 5px; text-align: center; border-radius: 8px; background: white; height: 160px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .qr-img img { margin: 0 auto; max-width: 100%; }
+
+        .hidden { display: none; }
+        #reader { width: 100%; border-radius: 10px; overflow: hidden; background: black; display: none; margin-bottom: 10px; }
+
+        @media print {
+            body * { visibility: hidden; }
+            #print-area, #print-area * { visibility: visible; }
+            #print-area { position: absolute; top: 0; left: 0; width: 100%; }
+            .qr-grid { display: grid !important; grid-template-columns: repeat(5, 1fr) !important; gap: 5px; }
+            .qr-card { border: 1px dashed #ccc; break-inside: avoid; height: auto; }
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- شاشة الدخول -->
+<div id="loginOverlay">
+    <div class="login-card">
+        <div style="font-size:3rem; margin-bottom:10px;">🔐</div>
+        <h2 style="margin:0 0 5px;">تسجيل الدخول</h2>
+        <input type="text" id="loginName" class="login-input" placeholder="اسم المستخدم">
+        <input type="number" id="loginCode" class="login-input" placeholder="الكود الشخصي">
+        <button onclick="App.login()" class="btn btn-primary" style="margin-top:10px;">دخول</button>
+    </div>
+</div>
+
+<div id="toast-container"></div>
+
+<header>
+    <div style="font-weight:700; font-size:1.1rem; color:var(--primary);">
+        📦 المخزن <span style="font-size:0.8rem; color:#999;">V23</span>
+        <!-- مؤشر الحالة -->
+        <div id="connStatus" class="conn-badge status-offline" style="margin-top:5px; display:inline-flex;">
+            <span class="dot"></span> <span id="connText">غير متصل</span>
+        </div>
+    </div>
+    <div id="userInfo" class="user-badge" onclick="App.logout()">خروج</div>
+</header>
+
+<div class="tabs-wrapper">
+    <div onclick="nav('dashboard')" class="nav-item active" id="btn-dashboard">📊 المخزون</div>
+    <div onclick="nav('logs')" class="nav-item" id="btn-logs">📝 السجل</div>
+    <div onclick="nav('scan')" class="nav-item" id="btn-scan">📷 المسح</div>
+    <div onclick="nav('products')" class="nav-item" id="btn-products">📦 المنتجات</div>
+    <div onclick="nav('print')" class="nav-item" id="btn-print">🖨️ طباعة</div>
+    <div onclick="nav('settings')" class="nav-item" id="btn-settings">⚙️ الإعدادات</div>
+</div>
+
+<div class="container">
+
+    <!-- اللوحة -->
+    <section id="dashboard">
+        <div class="card">
+            <h3>ملخص الكميات</h3>
+            <div class="table-responsive">
+                <table id="stockTable">
+                    <thead><tr><th>المنتج</th><th>وارد</th><th>منصرف</th><th>المتبقي</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- سجل العمليات -->
+    <section id="logs" class="hidden">
+        <div class="card">
+            <h3>سجل العمليات (محلي)</h3>
+            <div class="table-responsive" style="max-height:450px; overflow-y:auto;">
+                <table id="logsTable">
+                    <thead><tr><th>الوقت</th><th>المستخدم</th><th>العملية</th><th>التفاصيل</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- المسح -->
+    <section id="scan" class="hidden">
+        <div class="card">
+            <div class="form-grid">
+                <button onclick="App.startScan('in')" class="btn btn-success">📥 تسجيل وارد</button>
+                <button onclick="App.startScan('out')" class="btn btn-danger">📤 تسجيل منصرف</button>
+            </div>
+            <h4 id="scanTitle" style="text-align:center; color:#64748b; margin:0 0 10px;">اختر العملية..</h4>
+            <div id="reader"></div>
+            <input type="text" id="manualInput" placeholder="أو اكتب الكود يدوياً" onchange="App.handleScan(this.value)">
+            <button onclick="App.stopScan()" class="btn" style="background:#eee; color:#333; margin-top:10px;">إيقاف الكاميرا</button>
+        </div>
+    </section>
+
+    <!-- المنتجات -->
+    <section id="products" class="hidden">
+        <div class="card">
+            <h3>إضافة تصنيف</h3>
+            <div class="form-grid">
+                <input type="text" id="catName" placeholder="اسم التصنيف">
+                <input type="text" id="catCode" placeholder="كود (01)">
+            </div>
+            <button onclick="App.addCat()" class="btn btn-primary">حفظ التصنيف</button>
+        </div>
+        <div class="card">
+            <h3>إضافة منتج</h3>
+            <div class="form-grid">
+                <select id="selCat"></select>
+                <input type="text" id="prodName" placeholder="اسم المنتج">
+                <input type="text" id="prodCode" placeholder="كود المنتج">
+            </div>
+            <button onclick="App.addProd()" class="btn btn-primary">حفظ المنتج</button>
+        </div>
+    </section>
+
+    <!-- الطباعة -->
+    <section id="print" class="hidden">
+        <div class="card no-print">
+            <h3>طباعة الملصقات</h3>
+            <div class="toggle-container">
+                <div onclick="App.setPrintMode('new')" id="mode-new" class="toggle-btn active">✨ توليد جديد</div>
+                <div onclick="App.setPrintMode('reprint')" id="mode-reprint" class="toggle-btn">🔄 إعادة طباعة</div>
+            </div>
+            <div class="form-grid">
+                <select id="selProdQR"></select>
+                <input type="number" id="qty" value="10" placeholder="العدد">
+            </div>
+            <button onclick="App.genQR()" class="btn btn-success">عرض الملصقات</button>
+        </div>
+        <div id="print-area" style="display:none;">
+            <div class="no-print" style="margin-bottom:10px; display:flex; gap:10px;">
+                <button onclick="window.print()" class="btn btn-primary" style="flex:1;">🖨️ طباعة</button>
+                <button onclick="document.getElementById('print-area').style.display='none'" class="btn btn-danger" style="flex:1;">إغلاق</button>
+            </div>
+            <div id="grid" class="qr-grid"></div>
+        </div>
+    </section>
+
+    <!-- الإعدادات والمزامنة -->
+    <section id="settings" class="hidden">
+        <div class="card">
+            <h3>المزامنة السحابية (API)</h3>
+            <p style="font-size:0.8rem; color:#666;">أدخل رابط السيرفر لحفظ البيانات عليه.</p>
+            <input type="text" id="apiUrl" placeholder="https://api.yourserver.com/sync">
+            <div class="form-grid" style="margin-top:10px;">
+                <button onclick="App.syncManual()" class="btn btn-primary">☁️ مزامنة يدوية الآن</button>
+            </div>
+            <p id="lastSyncTime" style="font-size:0.7rem; color:#888; margin-top:5px;">آخر مزامنة: أبداً</p>
+        </div>
+
+        <div class="card">
+            <h3>البيانات المحلية</h3>
+            <div class="form-grid">
+                <button onclick="App.exportData()" class="btn btn-outline">تحميل نسخة JSON</button>
+                <button onclick="App.clearData()" class="btn btn-danger">حذف البيانات المحلية</button>
+            </div>
+        </div>
+    </section>
+
+</div>
+
+<script>
+const App = {
+    // قاعدة البيانات
+    db: { cats: [], prods: [], items: [], moves: [], logs: [], notifications: [], seq: 0, lastSync: null },
+    user: null,
+    scanner: null, mode: null,
+    printMode: 'new',
+    apiUrl: '',
+
+    init() {
+        // تحميل البيانات المحلية
+        const saved = localStorage.getItem('InvDB_V23');
+        if (saved) {
+            try { 
+                this.db = JSON.parse(saved); 
+                if (typeof this.db.seq !== 'number') this.db.seq = 0;
+            } catch(e) { this.db.seq = 0; }
+        }
+        
+        // التحقق من المستخدم
+        const savedUser = localStorage.getItem('InvUser_V23');
+        if (savedUser) {
+            this.user = JSON.parse(savedUser);
+            this.uiLogin();
+        } else {
+            document.getElementById('loginOverlay').style.display = 'flex';
+        }
+
+        // تحميل رابط API
+        const savedApi = localStorage.getItem('InvApi_V23');
+        if (savedApi) {
+            this.apiUrl = savedApi;
+            document.getElementById('apiUrl').value = savedApi;
+        }
+
+        // مراقبة الاتصال
+        window.addEventListener('online', () => this.updateConnStatus());
+        window.addEventListener('offline', () => this.updateConnStatus());
+        this.updateConnStatus();
+
+        this.renderUI();
+        nav('dashboard');
+    },
+
+    // --- حالة الاتصال والمزامنة ---
+    updateConnStatus() {
+        const badge = document.getElementById('connStatus');
+        const text = document.getElementById('connText');
+        
+        if (navigator.onLine) {
+            badge.className = 'conn-badge status-online';
+            text.innerText = 'متصل (جاهز للمزامنة)';
+            // محاولة المزامنة التلقائية عند عودة الاتصال
+            this.syncManual(true);
+        } else {
+            badge.className = 'conn-badge status-offline';
+            text.innerText = 'غير متصل (يعمل محلياً)';
+        }
+    },
+
+    async syncManual(silent = false) {
+        // تحديث الرابط
+        this.apiUrl = document.getElementById('apiUrl').value.trim();
+        localStorage.setItem('InvApi_V23', this.apiUrl);
+
+        if (!this.apiUrl) return !silent && this.notify('الرجاء إدخال رابط API', 'warning');
+        if (!navigator.onLine) return !silent && this.notify('لا يوجد إنترنت للمزامنة', 'error');
+
+        // تحديث الواجهة
+        const badge = document.getElementById('connStatus');
+        const text = document.getElementById('connText');
+        badge.className = 'conn-badge status-syncing';
+        text.innerText = 'جاري المزامنة...';
+
+        try {
+            // محاكاة إرسال البيانات للسيرفر (استبدل هذا بـ fetch حقيقي)
+            // const response = await fetch(this.apiUrl, { method: 'POST', body: JSON.stringify(this.db) });
+            
+            // محاكاة تأخير الشبكة
+            await new Promise(r => setTimeout(r, 1500));
+
+            // تحديث وقت المزامنة
+            this.db.lastSync = new Date().toISOString();
+            this.save();
+            
+            if(!silent) this.notify('تم حفظ البيانات في قاعدة البيانات بنجاح', 'success');
+            
+            // إعادة الحالة
+            this.updateConnStatus();
+            document.getElementById('lastSyncTime').innerText = `آخر مزامنة: ${new Date().toLocaleString('ar-EG')}`;
+
+        } catch (error) {
+            this.notify('فشل الاتصال بالسيرفر', 'error');
+            this.updateConnStatus(); // العودة للحالة الطبيعية
+        }
+    },
+
+    // --- النظام الأساسي ---
+    notify(msg, type = 'success') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        
+        let icon = '✅';
+        if (type === 'error') icon = '⛔';
+        if (type === 'warning') icon = '⚠️';
+        if (type === 'info') icon = 'ℹ️';
+
+        toast.innerHTML = `<span>${icon}</span><span>${msg}</span>`;
+        container.appendChild(toast);
+
+        setTimeout(() => {
+            toast.style.animation = 'fadeOut 0.3s forwards';
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+
+        // حفظ في السجل الداخلي للإشعارات
+        if(!this.db.notifications) this.db.notifications = [];
+        this.db.notifications.unshift({time:new Date().toISOString(), type, msg});
+        if(this.db.notifications.length > 50) this.db.notifications.pop();
+        this.save();
+    },
+
+    login() {
+        const name = document.getElementById('loginName').value.trim();
+        const code = document.getElementById('loginCode').value.trim();
+        if (!name || !code) return this.notify('البيانات ناقصة', 'error');
+        
+        this.user = { name, code };
+        localStorage.setItem('InvUser_V23', JSON.stringify(this.user));
+        this.uiLogin();
+        this.logAction('تسجيل دخول', 'بداية العمل');
+        this.notify(`مرحباً بك يا ${name}`, 'info');
+    },
+
+    logout() {
+        if(confirm('تسجيل خروج؟')) {
+            this.logAction('تسجيل خروج', 'نهاية العمل');
+            localStorage.removeItem('InvUser_V23');
+            location.reload();
+        }
+    },
+
+    uiLogin() {
+        document.getElementById('loginOverlay').style.display = 'none';
+        document.getElementById('userInfo').innerText = `${this.user.name} (#${this.user.code})`;
+    },
+
+    save() {
+        localStorage.setItem('InvDB_V23', JSON.stringify(this.db));
+        if(!document.getElementById('logs').classList.contains('hidden')) this.renderLogs();
+    },
+
+    logAction(action, detail) {
+        const entry = {
+            time: new Date().toISOString(),
+            user: this.user ? `${this.user.name} (${this.user.code})` : 'System',
+            action: action,
+            detail: detail
+        };
+        if(!this.db.logs) this.db.logs = [];
+        this.db.logs.unshift(entry);
+        if(this.db.logs.length > 500) this.db.logs.pop();
+        this.save();
+    },
+
+    // --- العمليات ---
+    addCat() {
+        const n = document.getElementById('catName').value;
+        const c = document.getElementById('catCode').value;
+        if(!n) return this.notify('أدخل البيانات', 'error');
+        this.db.cats.push({id: Date.now(), name:n, code:c});
+        this.logAction('إضافة تصنيف', n);
+        this.notify('تم الحفظ', 'success');
+        document.getElementById('catName').value='';
+        this.renderUI();
+    },
+
+    addProd() {
+        const ci = document.getElementById('selCat').value;
+        const n = document.getElementById('prodName').value;
+        const c = document.getElementById('prodCode').value;
+        if(!n) return this.notify('أدخل البيانات', 'error');
+        this.db.prods.push({id: Date.now(), catId:ci, name:n, code:c});
+        this.logAction('إضافة منتج', n);
+        this.notify('تم الحفظ', 'success');
+        document.getElementById('prodName').value='';
+        this.renderUI();
+    },
+
+    // --- الطباعة ---
+    setPrintMode(mode) {
+        this.printMode = mode;
+        document.getElementById('mode-new').className = `toggle-btn ${mode=='new'?'active':''}`;
+        document.getElementById('mode-reprint').className = `toggle-btn ${mode=='reprint'?'active':''}`;
+    },
+
+    genQR() {
+        const pid = document.getElementById('selProdQR').value;
+        const qty = parseInt(document.getElementById('qty').value);
+        if(!pid) return this.notify('اختر المنتج', 'error');
+        
+        const p = this.db.prods.find(x=>x.id==pid);
+        const c = this.db.cats.find(x=>x.id==p.catId);
+        const g = document.getElementById('grid'); g.innerHTML = '';
+        document.getElementById('print-area').style.display='block';
+
+        let items = [];
+        if (this.printMode === 'new') {
+            for(let i=0; i<qty; i++) {
+                this.db.seq = (this.db.seq || 0) + 1;
+                const sn = `${c.code}-${p.code}-${this.db.seq}`;
+                this.db.items.push({serial: sn, prodId: pid});
+                items.push(sn);
+            }
+            this.logAction('توليد جديد', `${p.name} (${qty})`);
+            this.notify(`تم توليد ${qty} كود جديد`, 'success');
+        } else {
+            const exist = this.db.items.filter(i => i.prodId == pid);
+            if(!exist.length) return this.notify('لا توجد أكواد سابقة', 'warning');
+            items = exist.slice(-qty).map(i => i.serial);
+            this.logAction('إعادة طباعة', `${p.name} (${items.length})`);
+            this.notify('تم استرجاع الأكواد', 'info');
+        }
+
+        let tasks = [];
+        items.forEach(sn => {
+            const card = document.createElement('div'); card.className='qr-card';
+            const img = document.createElement('div'); img.className='qr-img';
+            card.innerHTML = `<div style="font-size:0.8rem; margin-top:5px;"><b>${p.name}</b><br>${sn}</div>`;
+            card.prepend(img); g.appendChild(card);
+            tasks.push({el:img, txt:sn});
+        });
+        setTimeout(()=>{ tasks.forEach(t=>new QRCode(t.el, {text:t.txt, width:90, height:90})); }, 100);
+        this.save();
+    },
+
+    // --- المسح ---
+    startScan(m) {
+        this.mode = m;
+        document.getElementById('scanTitle').innerText = m=='in'?'وارد':'منصرف';
+        document.getElementById('reader').style.display='block';
+        if(!this.scanner) this.scanner = new Html5Qrcode("reader");
+        this.scanner.start({facingMode:"environment"}, {fps:10}, t=>this.handleScan(t)).catch(()=>this.notify('الكاميرا مغلقة', 'error'));
+    },
+    stopScan() { if(this.scanner) this.scanner.stop().then(()=>document.getElementById('reader').style.display='none'); },
+    
+    handleScan(t) {
+        t = t.trim(); if(!t) return;
+        const item = this.db.items.find(i=>i.serial==t);
+        if(!item) return this.notify('كود غير معرف', 'error');
+        
+        const p = this.db.prods.find(x=>x.id==item.prodId);
+        const exist = this.db.moves.find(m=>m.serial==t && m.type==this.mode);
+        
+        if(exist) return this.notify(`تم ${this.mode=='in'?'إدخاله':'صرفه'} مسبقاً`, 'warning');
+        
+        this.db.moves.push({serial:t, type:this.mode, user:this.user.code});
+        this.logAction(this.mode=='in'?'تسجيل وارد':'تسجيل منصرف', `${p.name} - ${t}`);
+        this.notify(`✅ تم العملية: ${p.name}`, 'success');
+        document.getElementById('manualInput').value='';
+        this.save();
+    },
+
+    // --- UI ---
+    renderUI() {
+        const fill = (id, arr) => {
+            document.getElementById(id).innerHTML = '<option value="">اختر...</option>' + 
+            arr.map(x=>`<option value="${x.id}">${x.name}</option>`).join('');
+        };
+        fill('selCat', this.db.cats); fill('selProdQR', this.db.prods);
+
+        document.querySelector('#stockTable tbody').innerHTML = this.db.prods.map(p => {
+            const sns = this.db.items.filter(i=>i.prodId==p.id).map(i=>i.serial);
+            const i = this.db.moves.filter(m=>m.type=='in' && sns.includes(m.serial)).length;
+            const o = this.db.moves.filter(m=>m.type=='out' && sns.includes(m.serial)).length;
+            return `<tr><td>${p.name}</td><td style="color:green">${i}</td><td style="color:red">${o}</td><td><b>${i-o}</b></td></tr>`;
+        }).join('');
+        
+        this.renderLogs();
+    },
+
+    renderLogs() {
+        const tbody = document.querySelector('#logsTable tbody');
+        if(!this.db.logs || this.db.logs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center">لا يوجد سجلات</td></tr>';
+            return;
+        }
+        tbody.innerHTML = this.db.logs.map(l => {
+            const date = new Date(l.time).toLocaleString('ar-EG');
+            return `<tr><td>${date}</td><td><b>${l.user}</b></td><td>${l.action}</td><td>${l.detail}</td></tr>`;
+        }).join('');
+    },
+
+    exportData() {
+        const a = document.createElement("a");
+        a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.db));
+        a.download = "inv_v23.json"; a.click();
+    },
+    
+    clearData() {
+        if(confirm('حذف الكل؟')) {
+            localStorage.removeItem('InvDB_V23');
+            localStorage.removeItem('InvUser_V23');
+            location.reload();
+        }
+    }
+};
+
+const nav = (id) => {
+    document.querySelectorAll('section').forEach(x=>x.classList.add('hidden'));
+    document.getElementById(id).classList.remove('hidden');
+    document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
+    document.getElementById('btn-'+id).classList.add('active');
+    if(id!='scan') App.stopScan();
+    if(id=='logs') App.renderLogs();
+};
+
+window.onload = () => App.init();
+</script>
+</body>
+</html>
