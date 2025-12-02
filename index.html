@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام إدارة المخزون - QR</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- QR Code Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js" integrity="sha384-oa5HkW0a1UblQpH2VPplBhCnfKYGdJEfzLHlc/T7sxLgjsWJq3+GPa0qGpC9v8c7" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" integrity="sha384-5Lmcf4v2nFlZM3ueJ7nV1sMLMEbZh1xlGZwP4P5KHZL8xZGJCVb1Qmqv6bU3WHFA" crossorigin="anonymous"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <h1>🏪 نظام إدارة المخزون</h1>
+            <p class="subtitle">إدارة البضائع بكود QR</p>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <nav class="nav-tabs">
+            <button class="nav-tab active" data-tab="dashboard">📊 لوحة التحكم</button>
+            <button class="nav-tab" data-tab="products">📦 المنتجات</button>
+            <button class="nav-tab" data-tab="categories">📁 الأصناف</button>
+            <button class="nav-tab" data-tab="stock-in">📥 إدخال</button>
+            <button class="nav-tab" data-tab="stock-out">📤 بيع</button>
+            <button class="nav-tab" data-tab="scanner">📷 ماسح QR</button>
+            <button class="nav-tab" data-tab="settings">⚙️ الإعدادات</button>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Dashboard Tab -->
+            <section id="dashboard" class="tab-content active">
+                <h2>📊 ملخص المخزون</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <span class="stat-icon">📦</span>
+                        <span class="stat-value" id="total-products">0</span>
+                        <span class="stat-label">إجمالي المنتجات</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-icon">📥</span>
+                        <span class="stat-value" id="total-stock-in">0</span>
+                        <span class="stat-label">إجمالي الوارد</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-icon">📤</span>
+                        <span class="stat-value" id="total-stock-out">0</span>
+                        <span class="stat-label">إجمالي المباع</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-icon">🏷️</span>
+                        <span class="stat-value" id="total-categories">0</span>
+                        <span class="stat-label">عدد الأصناف</span>
+                    </div>
+                </div>
+
+                <h3>⚠️ منتجات منخفضة المخزون</h3>
+                <div id="low-stock-list" class="product-list">
+                    <p class="empty-message">لا توجد منتجات منخفضة المخزون</p>
+                </div>
+
+                <h3>📋 آخر العمليات</h3>
+                <div id="recent-transactions" class="transaction-list">
+                    <p class="empty-message">لا توجد عمليات حديثة</p>
+                </div>
+            </section>
+
+            <!-- Products Tab -->
+            <section id="products" class="tab-content">
+                <h2>📦 إدارة المنتجات</h2>
+                
+                <div class="form-section">
+                    <h3>➕ إضافة منتج جديد</h3>
+                    <form id="product-form" class="form">
+                        <div class="form-group">
+                            <label for="product-name">اسم المنتج *</label>
+                            <input type="text" id="product-name" required placeholder="مثال: سكر ناعم 1 كيلو">
+                        </div>
+                        <div class="form-group">
+                            <label for="product-category">الصنف *</label>
+                            <select id="product-category" required>
+                                <option value="">اختر الصنف</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="product-barcode">الباركود (اختياري)</label>
+                            <input type="text" id="product-barcode" placeholder="رقم الباركود">
+                        </div>
+                        <div class="form-group">
+                            <label for="product-price">سعر البيع</label>
+                            <input type="number" id="product-price" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="product-cost">سعر الشراء</label>
+                            <input type="number" id="product-cost" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="product-min-stock">الحد الأدنى للمخزون</label>
+                            <input type="number" id="product-min-stock" min="0" value="10" placeholder="10">
+                        </div>
+                        <input type="hidden" id="product-id">
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">💾 حفظ المنتج</button>
+                            <button type="button" class="btn btn-secondary" id="cancel-product">❌ إلغاء</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="search-section">
+                    <input type="text" id="search-products" placeholder="🔍 البحث في المنتجات...">
+                    <select id="filter-category">
+                        <option value="">كل الأصناف</option>
+                    </select>
+                </div>
+
+                <div id="products-list" class="product-list">
+                    <p class="empty-message">لا توجد منتجات. أضف منتجك الأول!</p>
+                </div>
+            </section>
+
+            <!-- Categories Tab -->
+            <section id="categories" class="tab-content">
+                <h2>📁 إدارة الأصناف</h2>
+                
+                <div class="form-section">
+                    <h3>➕ إضافة صنف جديد</h3>
+                    <form id="category-form" class="form">
+                        <div class="form-group">
+                            <label for="category-name">اسم الصنف *</label>
+                            <input type="text" id="category-name" required placeholder="مثال: سكر، زيت، تونة">
+                        </div>
+                        <div class="form-group">
+                            <label for="category-description">الوصف</label>
+                            <textarea id="category-description" placeholder="وصف الصنف (اختياري)"></textarea>
+                        </div>
+                        <input type="hidden" id="category-id">
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">💾 حفظ الصنف</button>
+                            <button type="button" class="btn btn-secondary" id="cancel-category">❌ إلغاء</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div id="categories-list" class="category-list">
+                    <p class="empty-message">لا توجد أصناف. أضف صنفك الأول!</p>
+                </div>
+            </section>
+
+            <!-- Stock In Tab -->
+            <section id="stock-in" class="tab-content">
+                <h2>📥 إدخال بضاعة</h2>
+                
+                <div class="form-section">
+                    <form id="stock-in-form" class="form">
+                        <div class="form-group">
+                            <label for="stock-in-product">المنتج *</label>
+                            <select id="stock-in-product" required>
+                                <option value="">اختر المنتج</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="stock-in-quantity">الكمية *</label>
+                            <input type="number" id="stock-in-quantity" required min="1" placeholder="أدخل الكمية">
+                        </div>
+                        <div class="form-group">
+                            <label for="stock-in-notes">ملاحظات</label>
+                            <textarea id="stock-in-notes" placeholder="ملاحظات إضافية (اختياري)"></textarea>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-success">📥 إضافة للمخزون</button>
+                        </div>
+                    </form>
+                </div>
+
+                <h3>📋 سجل الإدخال</h3>
+                <div id="stock-in-history" class="transaction-list">
+                    <p class="empty-message">لا توجد عمليات إدخال</p>
+                </div>
+            </section>
+
+            <!-- Stock Out Tab -->
+            <section id="stock-out" class="tab-content">
+                <h2>📤 بيع بضاعة</h2>
+                
+                <div class="form-section">
+                    <form id="stock-out-form" class="form">
+                        <div class="form-group">
+                            <label for="stock-out-product">المنتج *</label>
+                            <select id="stock-out-product" required>
+                                <option value="">اختر المنتج</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="stock-out-quantity">الكمية *</label>
+                            <input type="number" id="stock-out-quantity" required min="1" placeholder="أدخل الكمية">
+                        </div>
+                        <div class="form-group">
+                            <label for="stock-out-notes">ملاحظات</label>
+                            <textarea id="stock-out-notes" placeholder="ملاحظات إضافية (اختياري)"></textarea>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-danger">📤 خصم من المخزون</button>
+                        </div>
+                    </form>
+                </div>
+
+                <h3>📋 سجل البيع</h3>
+                <div id="stock-out-history" class="transaction-list">
+                    <p class="empty-message">لا توجد عمليات بيع</p>
+                </div>
+            </section>
+
+            <!-- QR Scanner Tab -->
+            <section id="scanner" class="tab-content">
+                <h2>📷 ماسح كود QR</h2>
+                
+                <div class="scanner-section">
+                    <div class="scanner-mode">
+                        <button class="btn btn-success active" id="scan-mode-in">📥 إدخال</button>
+                        <button class="btn btn-danger" id="scan-mode-out">📤 بيع</button>
+                    </div>
+                    
+                    <div id="qr-reader" class="qr-reader"></div>
+                    
+                    <div class="scanner-controls">
+                        <button id="start-scanner" class="btn btn-primary">▶️ بدء المسح</button>
+                        <button id="stop-scanner" class="btn btn-secondary" disabled>⏹️ إيقاف</button>
+                    </div>
+                    
+                    <div id="scan-result" class="scan-result hidden">
+                        <h3>نتيجة المسح</h3>
+                        <div id="scanned-product-info"></div>
+                        <div class="form-group">
+                            <label for="scan-quantity">الكمية</label>
+                            <input type="number" id="scan-quantity" value="1" min="1">
+                        </div>
+                        <button id="confirm-scan" class="btn btn-primary">✅ تأكيد العملية</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Settings Tab -->
+            <section id="settings" class="tab-content">
+                <h2>⚙️ الإعدادات والنسخ الاحتياطي</h2>
+                
+                <div class="settings-section">
+                    <h3>📤 تصدير البيانات</h3>
+                    <p>حفظ نسخة احتياطية من جميع البيانات بصيغة JSON</p>
+                    <button id="export-data" class="btn btn-primary">📥 تحميل النسخة الاحتياطية</button>
+                </div>
+
+                <div class="settings-section">
+                    <h3>📥 استيراد البيانات</h3>
+                    <p>استعادة البيانات من نسخة احتياطية</p>
+                    <input type="file" id="import-file" accept=".json" class="file-input">
+                    <button id="import-data" class="btn btn-secondary">📤 استيراد من ملف</button>
+                </div>
+
+                <div class="settings-section danger-zone">
+                    <h3>⚠️ منطقة الخطر</h3>
+                    <p>حذف جميع البيانات - هذا الإجراء لا يمكن التراجع عنه!</p>
+                    <button id="clear-all-data" class="btn btn-danger">🗑️ حذف جميع البيانات</button>
+                </div>
+
+                <div class="settings-section">
+                    <h3>ℹ️ معلومات النظام</h3>
+                    <p>الإصدار: 1.0.0</p>
+                    <p>آخر تحديث: <span id="last-sync">غير متاح</span></p>
+                    <p>عدد السجلات: <span id="total-records">0</span></p>
+                </div>
+            </section>
+        </main>
+
+        <!-- QR Code Modal -->
+        <div id="qr-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>🏷️ كود QR للمنتج</h3>
+                    <button class="modal-close" id="close-qr-modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div id="qr-code-container"></div>
+                    <p id="qr-product-name"></p>
+                    <button id="print-qr" class="btn btn-primary">🖨️ طباعة</button>
+                    <button id="download-qr" class="btn btn-secondary">📥 تحميل</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast Notifications -->
+        <div id="toast-container"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
