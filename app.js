@@ -23,7 +23,7 @@ const DataStore = {
 
     // Generate unique ID
     generateId() {
-        return Date.now().toString(36) + Math.random().toString(36).substr(2);
+        return Date.now().toString(36) + Math.random().toString(36).slice(2);
     },
 
     // Get data from localStorage
@@ -489,6 +489,9 @@ const QRHandler = {
                 }
                 container.appendChild(canvas);
             });
+        } else {
+            UI.showToast('مكتبة QR غير متوفرة', 'error');
+            return;
         }
 
         document.getElementById('qr-product-name').textContent = product.name;
@@ -534,6 +537,7 @@ const QRHandler = {
                 document.getElementById('start-scanner').disabled = false;
                 document.getElementById('stop-scanner').disabled = true;
                 document.getElementById('qr-reader').innerHTML = '';
+                this.html5QrcodeScanner = null;
             }).catch(err => {
                 console.error('Error stopping scanner:', err);
             });
@@ -834,7 +838,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         const product = DataStore.getProductById(productId);
-        if (product.stock < quantity) {
+        if (!product || product.stock < quantity) {
             UI.showToast('الكمية المطلوبة أكبر من المخزون المتاح', 'error');
             return;
         }
