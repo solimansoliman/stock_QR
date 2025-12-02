@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>نظام المخزون الشامل - V17</title>
+    
+    <!-- الخطوط -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <!-- المكتبات -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+    <style>
+        :root {
+            --primary: #2563eb;       /* أزرق */
+            --primary-dark: #1e40af;
+            --success: #10b981;       /* أخضر */
+            --danger: #ef4444;        /* أحمر */
+            --warning: #f59e0b;       /* برتقالي */
+            --bg-body: #f8fafc;
+            --bg-card: #ffffff;
+            --text-main: #1e293b;
+            --text-light: #64748b;
+            --radius: 12px;
+        }
+
+        * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; }
+        
+        body {
+            font-family: 'Cairo', sans-serif; margin: 0; background-color: var(--bg-body);
+            color: var(--text-main); padding-bottom: 80px;
+        }
+
+        /* --- شاشة تسجيل الدخول (V16) --- */
+        #loginOverlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(135deg, var(--primary), #1e3a8a); z-index: 5000;
+            display: flex; justify-content: center; align-items: center;
+            flex-direction: column; color: white;
+        }
+        .login-box {
+            background: white; padding: 30px; border-radius: 20px;
+            width: 85%; max-width: 350px; text-align: center; color: #333;
+            box-shadow: 0 15px 30px rgba(0,0,0,0.2);
+        }
+        .login-input {
+            width: 100%; padding: 12px; border: 2px solid #e2e8f0;
+            border-radius: 10px; margin: 10px 0; font-size: 1rem; text-align: center;
+            font-family: 'Cairo'; transition: 0.3s;
+        }
+        .login-input:focus { border-color: var(--primary); background: #f8fafc; }
+
+        /* --- الهيدر (V16 + V13 Status) --- */
+        header {
+            background: var(--bg-card); padding: 12px 15px;
+            display: flex; justify-content: space-between; align-items: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05); position: sticky; top: 0; z-index: 50;
+        }
+        .brand { font-size: 1rem; font-weight: 700; color: var(--primary); display: flex; flex-direction: column; }
+        .sync-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-left: 5px; }
+        
+        .user-info { text-align: left; font-size: 0.8rem; line-height: 1.2; cursor: pointer; }
+        .user-name { font-weight: 700; display: block; }
+        .user-code { color: var(--text-light); background: #f1f5f9; padding: 2px 6px; border-radius: 8px; font-size: 0.7rem; }
+
+        /* --- القوائم --- */
+        .tabs-wrapper { background: var(--bg-card); padding: 10px; margin-bottom: 15px; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+        .tabs { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 5px; }
+        .nav-item {
+            padding: 8px 14px; border-radius: 20px; background: #f1f5f9;
+            color: var(--text-light); font-weight: 600; border: none; cursor: pointer; 
+            white-space: nowrap; transition: 0.2s; font-size: 0.9rem;
+        }
+        .nav-item.active { background: var(--primary); color: white; box-shadow: 0 2px 5px rgba(37,99,235,0.3); }
+
+        /* --- الحاويات --- */
+        .container { max-width: 800px; margin: 0 auto; padding: 0 15px; }
+        .card {
+            background: var(--bg-card); border-radius: var(--radius); padding: 15px;
+            margin-bottom: 15px; border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        }
+        h3 { margin-top: 0; font-size: 1rem; border-right: 4px solid var(--primary); padding-right: 10px; margin-bottom: 15px; }
+
+        /* --- النماذج --- */
+        .grid-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(100%, 1fr)); gap: 10px; margin-bottom: 15px; }
+        @media(min-width: 600px) { .grid-form { grid-template-columns: repeat(2, 1fr); } }
+
+        label { display: block; margin-bottom: 4px; font-size: 0.85rem; font-weight: 600; color: var(--text-light); }
+        input, select { 
+            width: 100%; padding: 12px; border: 1px solid #cbd5e1; 
+            border-radius: 8px; font-family: 'Cairo'; font-size: 0.95rem; background: #fff;
+        }
+        
+        /* مفتاح المزامنة (V13) */
+        .switch-container { display: flex; align-items: center; justify-content: space-between; background: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e2e8f0; }
+        .switch { position: relative; display: inline-block; width: 46px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #cbd5e1; transition: .4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--primary); }
+        input:checked + .slider:before { transform: translateX(22px); }
+
+        /* --- الأزرار --- */
+        .btn {
+            width: 100%; padding: 12px; border: none; border-radius: 8px; 
+            font-family: 'Cairo'; font-weight: 700; cursor: pointer; font-size: 0.95rem;
+            display: flex; justify-content: center; align-items: center; gap: 8px; transition: 0.2s;
+        }
+        .btn:active { transform: scale(0.98); }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-outline { background: white; border: 1px solid #cbd5e1; color: var(--text-main); }
+        
+        /* --- شبكة QR --- */
+        .qr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-top: 10px; padding-bottom: 20px; }
+        .qr-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; text-align: center; height: 170px; }
+        .qr-details { font-size: 0.75rem; background: #f8fafc; width: 100%; padding: 4px; border-radius: 4px; margin-top: 5px; overflow: hidden; }
+
+        /* شريط الطباعة */
+        #print-toolbar {
+            position: sticky; top: 0; z-index: 100; background: white; padding: 10px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-bottom: 1px solid #e2e8f0;
+            display: flex; gap: 10px; align-items: center; justify-content: space-between;
+            margin: -15px -15px 15px -15px; 
+        }
+
+        /* --- الجداول (V15 Stock View) --- */
+        table { width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 0.85rem; }
+        th, td { padding: 10px 5px; text-align: center; border-bottom: 1px solid #e2e8f0; }
+        th { background: #f1f5f9; color: var(--text-light); font-weight: 600; }
+        td:first-child { text-align: right; font-weight: 600; }
+        .badge { padding: 3px 8px; border-radius: 6px; font-size: 0.8rem; font-weight: bold; display: inline-block; min-width: 30px; }
+
+        /* --- الإشعارات --- */
+        #toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 6000; width: 90%; max-width: 400px; pointer-events: none; }
+        .toast { pointer-events: auto; padding: 10px 16px; border-radius: 12px; color: white; margin-bottom: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); display: flex; align-items: center; gap: 10px; animation: slideDown 0.3s ease-out; font-weight: 600; font-size: 0.9rem; }
+        .toast.success { background: var(--success); } .toast.error { background: var(--danger); } .toast.warning { background: var(--warning); color: #fff; }
+        @keyframes slideDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        /* الطباعة */
+        @media print {
+            body * { visibility: hidden; }
+            #print-area, #print-area * { visibility: visible; }
+            #print-area { position: absolute; left: 0; top: 0; width: 100%; }
+            .qr-grid { display: grid !important; grid-template-columns: repeat(var(--print-cols), 1fr) !important; gap: 5px !important; }
+            .qr-card { border: 1px dashed #ccc; box-shadow: none; break-inside: avoid; height: auto; }
+            #print-toolbar { display: none !important; }
+            .no-print { display: none !important; }
+        }
+
+        .hidden { display: none; }
+        #reader { width: 100%; border-radius: 12px; overflow: hidden; display: none; margin-bottom: 15px; background: #000; }
+    </style>
+</head>
+<body>
+
+<!-- شاشة تسجيل الدخول (V16) -->
+<div id="loginOverlay">
+    <div style="font-size:3rem; margin-bottom:15px; background: white; width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">👤</div>
+    <div class="login-box">
+        <h2 style="margin:0 0 5px; color:var(--primary);">تسجيل الدخول</h2>
+        <p style="color:#666; font-size:0.9rem; margin-bottom: 20px;">أدخل بياناتك للبدء</p>
+        
+        <input type="text" id="loginName" class="login-input" placeholder="اسم المستخدم">
+        <input type="tel" id="loginCode" class="login-input" placeholder="الكود الشخصي (رقم)">
+        
+        <button onclick="App.login()" class="btn btn-primary" style="margin-top: 15px;">دخول النظام</button>
+    </div>
+</div>
+
+<div id="toast-container"></div>
+
+<header>
+    <div class="brand">
+        <span>📦 المخزن الذكي</span>
+        <span style="font-size:0.7em; color:#94a3b8; font-weight:400;">
+            <span id="syncDot" class="sync-dot" style="background:red;"></span> <span id="syncText">غير متصل</span>
+        </span>
+    </div>
+    
+    <!-- معلومات المستخدم (V16) -->
+    <div id="userDisplay" class="user-info" style="display:none;" onclick="App.logout()">
+        <span id="displayUserName" class="user-name">Guest</span>
+        <span id="displayUserCode" class="user-code">#000</span>
+    </div>
+</header>
+
+<div class="tabs-wrapper">
+    <div class="tabs">
+        <button onclick="nav('dashboard')" class="nav-item active" id="btn-dashboard">📊 المخزون</button>
+        <button onclick="nav('scan')" class="nav-item" id="btn-scan">📷 المسح</button>
+        <button onclick="nav('products')" class="nav-item" id="btn-products">📦 إضافة</button>
+        <button onclick="nav('print')" class="nav-item" id="btn-print">🖨️ طباعة</button>
+        <button onclick="nav('settings')" class="nav-item" id="btn-settings">⚙️ الإعدادات</button>
+    </div>
+</div>
+
+<div class="container">
+
+    <!-- 1. اللوحة (V15 Stock View) -->
+    <section id="dashboard">
+        <div class="card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <h3>ملخص المخزون</h3>
+                <button onclick="App.renderUI()" style="background:none; border:none; color:var(--primary); cursor:pointer;">🔄 تحديث</button>
+            </div>
+            <div style="overflow-x:auto;">
+                <table id="stockTable">
+                    <thead>
+                        <tr>
+                            <th>المنتج</th>
+                            <th>وارد</th>
+                            <th>منصرف</th>
+                            <th>المتبقي</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- 2. المسح (V16 Tracking) -->
+    <section id="scan" class="hidden">
+        <div class="card">
+            <div style="display:flex; gap:10px; margin-bottom:20px;">
+                <button onclick="App.startScan('in')" class="btn btn-success" style="height:50px;">📥 وارد</button>
+                <butt
