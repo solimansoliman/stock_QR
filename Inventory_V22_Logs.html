@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>نظام المخزون - V22 (سجل العمليات)</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+    <style>
+        :root {
+            --primary: #2563eb;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --info: #3b82f6;
+            --bg-body: #f8fafc;
+            --bg-card: #ffffff;
+            --text-main: #1e293b;
+            --radius: 12px;
+        }
+
+        * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; }
+        
+        body {
+            font-family: 'Cairo', sans-serif; margin: 0; background-color: var(--bg-body);
+            color: var(--text-main); padding-bottom: 90px;
+        }
+
+        /* --- حاوية الإشعارات --- */
+        #toast-container {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            z-index: 9999; width: 90%; max-width: 400px;
+            display: flex; flex-direction: column; gap: 10px; pointer-events: none;
+        }
+        .toast {
+            pointer-events: auto; background: white; padding: 12px 15px; border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15); display: flex; align-items: center; gap: 12px;
+            animation: slideIn 0.3s; border-right: 5px solid transparent; font-size: 0.95rem; font-weight: 600;
+        }
+        .toast.success { border-right-color: var(--success); color: #065f46; }
+        .toast.error { border-right-color: var(--danger); color: #991b1b; }
+        .toast.warning { border-right-color: var(--warning); color: #92400e; }
+        .toast.info { border-right-color: var(--info); color: #1e40af; }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; transform: translateY(-20px); } }
+
+        /* --- نافذة التأكيد --- */
+        #confirmOverlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6); z-index: 5000; display: none; justify-content: center; align-items: center;
+        }
+        .confirm-box { background: white; width: 90%; max-width: 350px; padding: 25px; border-radius: 20px; text-align: center; }
+        .confirm-actions { display: flex; gap: 10px; margin-top: 20px; }
+
+        /* --- شاشة الدخول --- */
+        #loginOverlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(135deg, #1e3a8a, var(--primary)); 
+            z-index: 4000; display: flex; justify-content: center; align-items: center;
+        }
+        .login-card { background: white; width: 85%; max-width: 350px; padding: 30px; border-radius: 20px; text-align: center; }
+        .login-input { width: 100%; padding: 12px; margin: 8px 0; border: 2px solid #e2e8f0; border-radius: 10px; font-family: 'Cairo'; text-align: center; }
+
+        /* --- الهيدر --- */
+        header { background: white; padding: 15px; position: sticky; top: 0; z-index: 100; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; }
+        .user-badge { font-size: 0.8rem; background: #e0f2fe; color: #0369a1; padding: 5px 12px; border-radius: 20px; font-weight: bold; cursor: pointer; }
+
+        /* --- القوائم --- */
+        .tabs-wrapper { padding: 10px; background: white; overflow-x: auto; white-space: nowrap; margin-bottom: 15px; border-bottom: 1px solid #e2e8f0; }
+        .nav-item { display: inline-block; padding: 8px 16px; background: #f1f5f9; border-radius: 20px; margin-left: 5px; cursor: pointer; color: #64748b; font-weight: 600; font-size: 0.9rem; transition: 0.2s; }
+        .nav-item.active { background: var(--primary); color: white; }
+
+        /* --- المحتوى --- */
+        .container { max-width: 900px; margin: 0 auto; padding: 0 10px; }
+        .card { background: white; padding: 15px; border-radius: var(--radius); margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); border: 1px solid #e2e8f0; }
+        h3 { margin-top: 0; color: var(--primary); border-bottom: 1px solid #eee; padding-bottom: 10px; font-size: 1.1rem; }
+
+        /* --- الجداول --- */
+        .table-responsive { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; min-width: 500px; }
+        th { background: #f8fafc; padding: 10px; text-align: right; font-weight: 700; color: #475569; }
+        td { padding: 10px; border-bottom: 1px solid #e2e8f0; }
+        .badge { padding: 3px 8px; border-radius: 5px; font-weight: bold; font-size: 0.8rem; }
+        .time-cell { font-size: 0.75rem; color: #64748b; font-family: monospace; direction: ltr; }
+
+        /* --- النماذج --- */
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 15px; }
+        input, select { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: 'Cairo'; }
+        
+        .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; color: white; font-weight: bold; cursor: pointer; font-family: 'Cairo'; transition: 0.2s; }
+        .btn-primary { background: var(--primary); } .btn-success { background: var(--success); } .btn-danger { background: var(--danger); } .btn-outline { background: white; border: 1px solid #cbd5e1; color: #333; }
+
+        /* --- الطباعة --- */
+        .toggle-container { display: flex; background: #f1f5f9; padding: 5px; border-radius: 10px; margin-bottom: 15px; }
+        .toggle-btn { flex: 1; padding: 8px; text-align: center; cursor: pointer; border-radius: 8px; font-weight: 600; font-size: 0.9rem; color: #64748b; }
+        .toggle-btn.active { background: white; color: var(--primary); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .qr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-top: 15px; }
+        .qr-card { border: 1px solid #e2e8f0; padding: 5px; text-align: center; border-radius: 8px; background: white; height: 160px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .qr-img img { margin: 0 auto; max-width: 100%; }
+
+        .hidden { display: none; }
+        #reader { width: 100%; border-radius: 10px; overflow: hidden; background: black; display: none; margin-bottom: 10px; }
+
+        @media print {
+            body * { visibility: hidden; }
+            #print-area, #print-area * { visibility: visible; }
+            #print-area { position: absolute; top: 0; left: 0; width: 100%; }
+            .qr-grid { display: grid !important; grid-template-columns: repeat(5, 1fr) !important; gap: 5px; }
+            .qr-card { border: 1px dashed #ccc; break-inside: avoid; height: auto; }
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- شاشة الدخول -->
+<div id="loginOverlay">
+    <div class="login-card">
+        <div style="font-size:3rem; margin-bottom:10px;">🔐</div>
+        <h2 style="margin:0 0 5px;">تسجيل الدخول</h2>
+        <input type="text" id="loginName" class="login-input" placeholder="اسم المستخدم">
+        <input type="number" id="loginCode" class="login-input" placeholder="الكود الشخصي">
+        <button onclick="App.login()" class="btn btn-primary" style="margin-top:10px;">دخول</button>
+    </div>
+</div>
+
+<!-- الإشعارات -->
+<div id="toast-container"></div>
+
+<!-- نافذة التأكيد -->
+<div id="confirmOverlay">
+    <div class="confirm-box">
+        <div style="font-size:3rem; margin-bottom:10px;">⚠️</div>
+        <h3 id="confirmTitle" style="border:none; padding:0; margin-bottom:5px;">تنبيه</h3>
+        <p id="confirmDesc" style="color:#666; margin-bottom:20px; font-size:0.9rem;"></p>
+        <div class="confirm-actions">
+            <button id="btnConfirmYes" class="btn btn-primary" style="flex:1;">نعم</button>
+            <button onclick="document.getElementById('confirmOverlay').style.display='none'" class="btn btn-outline" style="flex:1;">إلغاء</button>
+        </div>
+    </div>
+</div>
+
+<header>
+    <div style="font-weight:700; font-size:1.1rem; color:var(--primary);">📦 المخزن V22</div>
+    <div id="userInfo" class="user-badge" onclick="App.logout()">تسجيل خروج</div>
+</header>
+
+<div class="tabs-wrapper">
+    <div onclick="nav('dashboard')" class="nav-item active" id="btn-dashboard">📊 المخزون</div>
+    <div onclick="nav('logs')" class="nav-item" id="btn-logs">📝 السجل</div>
+    <div onclick="nav('notifs')" class="nav-item" id="btn-notifs">🔔 الإشعارات</div>
+    <div onclick="nav('scan')" class="nav-item" id="btn-scan">📷 المسح</div>
+    <div onclick="nav('products')" class="nav-item" id="btn-products">📦 المنتجات</div>
+    <div onclick="nav('print')" class="nav-item" id="btn-print">🖨️ طباعة</div>
+    <div onclick="nav('settings')" class="nav-item" id="btn-settings">⚙️ الإعدادات</div>
+</div>
+
+<div class="container">
+
+    <!-- اللوحة -->
+    <section id="dashboard">
+        <div class="card">
+            <h3>ملخص الكميات</h3>
+            <div class="table-responsive">
+                <table id="stockTable">
+                    <thead><tr><th>المنتج</th><th>وارد</th><th>منصرف</th><th>المتبقي</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- سجل العمليات (الجديد والمطلوب) -->
+    <section id="logs" class="hidden">
+        <div class="card">
+            <h3>سجل عمليات المستخدمين</h3>
+            <div class="table-responsive" style="max-height:450px; overflow-y:auto;">
+                <table id="logsTable">
+                    <thead><tr><th>الوقت</th><th>المستخدم</th><th>العملية</th><th>التفاصيل</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- أرشيف الإشعارات -->
+    <section id="notifs" class="hidden">
+        <div class="card">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h3>أرشيف رسائل النظام</h3>
+                <button onclick="App.clearNotifs()" style="background:none; border:none; color:red; cursor:pointer;">مسح</button>
+            </div>
+            <div class="table-responsive" style="max-height:450px; overflow-y:auto;">
+                <table id="notifsTable">
+                    <thead><tr><th>الوقت</th><th>النوع</th><th>الرسالة</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- المسح -->
+    <section id="scan" class="hidden">
+        <div class="card">
+            <div class="form-grid">
+                <button onclick="App.startScan('in')" class="btn btn-success">📥 تسجيل وارد</button>
+                <button onclick="App.startScan('out')" class="btn btn-danger">📤 تسجيل منصرف</button>
+            </div>
+            <h4 id="scanTitle" style="text-align:center; color:#64748b; margin:0 0 10px;">اختر العملية..</h4>
+            <div id="reader"></div>
+            <input type="text" id="manualInput" placeholder="أو اكتب الكود يدوياً" onchange="App.handleScan(this.value)">
+            <button onclick="App.stopScan()" class="btn" style="background:#eee; color:#333; margin-top:10px;">إيقاف الكاميرا</button>
+        </div>
+    </section>
+
+    <!-- المنتجات -->
+    <section id="products" class="hidden">
+        <div class="card">
+            <h3>إضافة تصنيف</h3>
+            <div class="form-grid">
+                <input type="text" id="catName" placeholder="اسم التصنيف">
+                <input type="text" id="catCode" placeholder="كود (01)">
+            </div>
+            <button onclick="App.addCat()" class="btn btn-primary">حفظ التصنيف</button>
+        </div>
+        <div class="card">
+            <h3>إضافة منتج</h3>
+            <div class="form-grid">
+                <select id="selCat"></select>
+                <input type="text" id="prodName" placeholder="اسم المنتج">
+                <input type="text" id="prodCode" placeholder="كود المنتج">
+            </div>
+            <button onclick="App.addProd()" class="btn btn-primary">حفظ المنتج</button>
+        </div>
+    </section>
+
+    <!-- الطباعة -->
+    <section id="print" class="hidden">
+        <div class="card no-print">
+            <h3>طباعة الملصقات</h3>
+            <div class="toggle-container">
+                <div onclick="App.setPrintMode('new')" id="mode-new" class="toggle-btn active">✨ توليد جديد</div>
+                <div onclick="App.setPrintMode('reprint')" id="mode-reprint" class="toggle-btn">🔄 إعادة طباعة</div>
+            </div>
+            <div class="form-grid">
+                <select id="selProdQR"></select>
+                <input type="number" id="qty" value="10" placeholder="العدد">
+            </div>
+            <button onclick="App.genQR()" class="btn btn-success">عرض الملصقات</button>
+        </div>
+        <div id="print-area" style="display:none;">
+            <div class="no-print" style="margin-bottom:10px; display:flex; gap:10px;">
+                <button onclick="window.print()" class="btn btn-primary" style="flex:1;">🖨️ طباعة</button>
+                <button onclick="document.getElementById('print-area').style.display='none'" class="btn btn-danger" style="flex:1;">إغلاق</button>
+            </div>
+            <div id="grid" class="qr-grid"></div>
+        </div>
+    </section>
+
+    <!-- الإعدادات -->
+    <section id="settings" class="hidden">
+        <div class="card">
+            <h3>الإعدادات</h3>
+            <div class="form-grid">
+                <button onclick="App.exportData()" class="btn btn-outline">تحميل نسخة JSON</button>
+                <button onclick="App.clearData()" class="btn btn-danger">حذف جميع البيانات</button>
+            </div>
+        </div>
+    </section>
+
+</div>
+
+<script>
+const App = {
+    // قاعدة البيانات تشمل (logs) لسجل العمليات و (notifications) للإشعارات
+    db: { cats: [], prods: [], items: [], moves: [], logs: [], notifications: [], seq: 0 },
+    user: null,
+    scanner: null, mode: null,
+    printMode: 'new',
+
+    init() {
+        const saved = localStorage.getItem('InvDB_V22');
+        if (saved) {
+            try { 
+                this.db = JSON.parse(saved); 
+                if (typeof this.db.seq !== 'number') this.db.seq = 0;
+                if (!this.db.logs) this.db.logs = []; // ضمان وجود السجل
+                if (!this.db.notifications) this.db.notifications = [];
+            } catch(e) { this.db.seq = 0; }
+        }
+        
+        const savedUser = localStorage.getItem('InvUser_V22');
+        if (savedUser) {
+            this.user = JSON.parse(savedUser);
+            this.uiLogin();
+        } else {
+            document.getElementById('loginOverlay').style.display = 'flex';
+        }
+
+        this.renderUI();
+        nav('dashboard');
+    },
+
+    // --- السجل والعمليات (The Log System) ---
+    logAction(action, detail) {
+        // إضافة للسجل الدائم
+        const entry = {
+            time: new Date().toISOString(),
+            user: this.user ? `${this.user.name} (${this.user.code})` : 'System',
+            action: action,
+            detail: detail
+        };
+        this.db.logs.unshift(entry);
+        if(this.db.logs.length > 500) this.db.logs.pop(); // الاحتفاظ بآخر 500 عملية
+        this.save();
+    },
+
+    // --- الإشعارات ---
+    notify(msg, type = 'success') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        
+        let icon = '✅';
+        if (type === 'error') icon = '⛔';
+        if (type === 'warning') icon = '⚠️';
+        if (type === 'info') icon = 'ℹ️';
+
+        toast.innerHTML = `<span>${icon}</span><span>${msg}</span>`;
+        container.appendChild(toast);
+
+        setTimeout(() => {
+            toast.style.animation = 'fadeOut 0.3s forwards';
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+
+        // حفظ الإشعار في الأرشيف
+        const notif = {
+            time: new Date().toISOString(),
+            type: type,
+            msg: msg
+        };
+        this.db.notifications.unshift(notif);
+        if(this.db.notifications.length > 50) this.db.notifications.pop();
+        this.save();
+    },
+
+    // --- باقي النظام ---
+    confirm(title, msg, callback) {
+        document.getElementById('confirmOverlay').style.display = 'flex';
+        const btnYes = document.getElementById('btnConfirmYes');
+        const newBtn = btnYes.cloneNode(true);
+        btnYes.parentNode.replaceChild(newBtn, btnYes);
+        newBtn.onclick = () => {
+            document.getElementById('confirmOverlay').style.display = 'none';
+            callback();
+        };
+    },
+
+    login() {
+        const name = document.getElementById('loginName').value.trim();
+        const code = document.getElementById('loginCode').value.trim();
+        if (!name || !code) return this.notify('البيانات ناقصة', 'error');
+        
+        this.user = { name, code };
+        localStorage.setItem('InvUser_V22', JSON.stringify(this.user));
+        this.uiLogin();
+        this.logAction('تسجيل دخول', 'بداية العمل');
+        this.notify(`مرحباً بك يا ${name}`, 'info');
+    },
+
+    logout() {
+        this.confirm('تسجيل خروج', 'إنهاء الجلسة؟', () => {
+            this.logAction('تسجيل خروج', 'نهاية العمل');
+            localStorage.removeItem('InvUser_V22');
+            location.reload();
+        });
+    },
+
+    uiLogin() {
+        document.getElementById('loginOverlay').style.display = 'none';
+        document.getElementById('userInfo').innerText = `${this.user.name} (#${this.user.code})`;
+    },
+
+    save() {
+        localStorage.setItem('InvDB_V22', JSON.stringify(this.db));
+        // تحديث الجداول إذا كانت ظاهرة
+        if(!document.getElementById('logs').classList.contains('hidden')) this.renderLogs();
+        if(!document.getElementById('notifs').classList.contains('hidden')) this.renderNotifs();
+    },
+
+    // --- العمليات ---
+    addCat() {
+        const n = document.getElementById('catName').value;
+        const c = document.getElementById('catCode').value;
+        if(!n) return this.notify('أدخل البيانات', 'error');
+        this.db.cats.push({id: Date.now(), name:n, code:c});
+        this.logAction('إضافة تصنيف', n);
+        this.notify('تم إضافة التصنيف', 'success');
+        document.getElementById('catName').value='';
+        this.renderUI();
+    },
+
+    addProd() {
+        const ci = document.getElementById('selCat').value;
+        const n = document.getElementById('prodName').value;
+        const c = document.getElementById('prodCode').value;
+        if(!n) return this.notify('أدخل البيانات', 'error');
+        this.db.prods.push({id: Date.now(), catId:ci, name:n, code:c});
+        this.logAction('إضافة منتج', n);
+        this.notify('تم إضافة المنتج', 'success');
+        document.getElementById('prodName').value='';
+        this.renderUI();
+    },
+
+    setPrintMode(mode) {
+        this.printMode = mode;
+        document.getElementById('mode-new').className = `toggle-btn ${mode=='new'?'active':''}`;
+        document.getElementById('mode-reprint').className = `toggle-btn ${mode=='reprint'?'active':''}`;
+    },
+
+    genQR() {
+        const pid = document.getElementById('selProdQR').value;
+        const qty = parseInt(document.getElementById('qty').value);
+        if(!pid) return this.notify('اختر المنتج', 'error');
+        
+        const p = this.db.prods.find(x=>x.id==pid);
+        const c = this.db.cats.find(x=>x.id==p.catId);
+        const g = document.getElementById('grid'); g.innerHTML = '';
+        document.getElementById('print-area').style.display='block';
+
+        let items = [];
+        if (this.printMode === 'new') {
+            for(let i=0; i<qty; i++) {
+                this.db.seq = (this.db.seq || 0) + 1;
+                const sn = `${c.code}-${p.code}-${this.db.seq}`;
+                this.db.items.push({serial: sn, prodId: pid});
+                items.push(sn);
+            }
+            this.logAction('توليد جديد', `${p.name} - العدد: ${qty}`);
+            this.notify(`تم توليد ${qty} كود جديد`, 'success');
+        } else {
+            const exist = this.db.items.filter(i => i.prodId == pid);
+            if(!exist.length) return this.notify('لا توجد أكواد سابقة', 'warning');
+            items = exist.slice(-qty).map(i => i.serial);
+            this.logAction('إعادة طباعة', `${p.name} - العدد: ${items.length}`);
+            this.notify('تم استرجاع الأكواد', 'info');
+        }
+
+        let tasks = [];
+        items.forEach(sn => {
+            const card = document.createElement('div'); card.className='qr-card';
+            const img = document.createElement('div'); img.className='qr-img';
+            card.innerHTML = `<div style="font-size:0.8rem; margin-top:5px;"><b>${p.name}</b><br>${sn}</div>`;
+            card.prepend(img); g.appendChild(card);
+            tasks.push({el:img, txt:sn});
+        });
+        setTimeout(()=>{ tasks.forEach(t=>new QRCode(t.el, {text:t.txt, width:90, height:90})); }, 100);
+        this.save();
+    },
+
+    startScan(m) {
+        this.mode = m;
+        document.getElementById('scanTitle').innerText = m=='in'?'وارد':'منصرف';
+        document.getElementById('reader').style.display='block';
+        if(!this.scanner) this.scanner = new Html5Qrcode("reader");
+        this.scanner.start({facingMode:"environment"}, {fps:10}, t=>this.handleScan(t))
+        .catch(()=>this.notify('الكاميرا غير متوفرة', 'error'));
+    },
+    stopScan() { if(this.scanner) this.scanner.stop().then(()=>document.getElementById('reader').style.display='none'); },
+    
+    handleScan(t) {
+        t = t.trim(); if(!t) return;
+        const item = this.db.items.find(i=>i.serial==t);
+        if(!item) return this.notify('كود غير معرف', 'error');
+        
+        const p = this.db.prods.find(x=>x.id==item.prodId);
+        const exist = this.db.moves.find(m=>m.serial==t && m.type==this.mode);
+        
+        if(exist) return this.notify('مكرر', 'warning');
+        
+        this.db.moves.push({serial:t, type:this.mode, user:this.user.code});
+        this.logAction(this.mode=='in'?'استلام وارد':'صرف مخزون', `${p.name} (${t})`);
+        this.notify(`✅ تم ${this.mode=='in'?'إضافة':'صرف'} ${p.name}`, 'success');
+        document.getElementById('manualInput').value='';
+        this.save();
+    },
+
+    // --- UI ---
+    renderUI() {
+        const fill = (id, arr) => {
+            document.getElementById(id).innerHTML = '<option value="">اختر...</option>' + 
+            arr.map(x=>`<option value="${x.id}">${x.name}</option>`).join('');
+        };
+        fill('selCat', this.db.cats); fill('selProdQR', this.db.prods);
+
+        document.querySelector('#stockTable tbody').innerHTML = this.db.prods.map(p => {
+            const sns = this.db.items.filter(i=>i.prodId==p.id).map(i=>i.serial);
+            const i = this.db.moves.filter(m=>m.type=='in' && sns.includes(m.serial)).length;
+            const o = this.db.moves.filter(m=>m.type=='out' && sns.includes(m.serial)).length;
+            return `<tr><td>${p.name}</td><td style="color:green">${i}</td><td style="color:red">${o}</td><td><b>${i-o}</b></td></tr>`;
+        }).join('');
+        
+        this.renderLogs();
+        this.renderNotifs();
+    },
+
+    renderLogs() {
+        const tbody = document.querySelector('#logsTable tbody');
+        if(!this.db.logs || this.db.logs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center">لا يوجد سجلات</td></tr>';
+            return;
+        }
+        tbody.innerHTML = this.db.logs.map(l => {
+            const date = new Date(l.time).toLocaleString('ar-EG');
+            return `<tr><td class="time-cell">${date}</td><td style="font-weight:bold">${l.user}</td><td>${l.action}</td><td style="color:#666">${l.detail}</td></tr>`;
+        }).join('');
+    },
+
+    renderNotifs() {
+        const tbody = document.querySelector('#notifsTable tbody');
+        if(!this.db.notifications || this.db.notifications.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center">لا توجد إشعارات</td></tr>';
+            return;
+        }
+        tbody.innerHTML = this.db.notifications.map(n => {
+            const date = new Date(n.time).toLocaleTimeString('ar-EG');
+            return `<tr><td class="time-cell">${date}</td><td style="color:${n.type=='error'?'red':'green'}">${n.type}</td><td>${n.msg}</td></tr>`;
+        }).join('');
+    },
+
+    clearNotifs() {
+        this.confirm('مسح الإشعارات', 'حذف سجل الإشعارات فقط؟', () => {
+            this.db.notifications = [];
+            this.save();
+            this.notify('تم مسح الإشعارات', 'info');
+        });
+    },
+
+    exportData() {
+        const a = document.createElement("a");
+        a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.db));
+        a.download = "inv_v22.json"; a.click();
+    },
+    
+    clearData() {
+        this.confirm('حذف الكل', 'تحذير: سيتم حذف كل البيانات!', () => {
+            localStorage.removeItem('InvDB_V22');
+            localStorage.removeItem('InvUser_V22');
+            location.reload();
+        });
+    }
+};
+
+const nav = (id) => {
+    document.querySelectorAll('section').forEach(x=>x.classList.add('hidden'));
+    document.getElementById(id).classList.remove('hidden');
+    document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
+    document.getElementById('btn-'+id).classList.add('active');
+    if(id!='scan') App.stopScan();
+    // Refresh tables on nav
+    if(id=='logs') App.renderLogs();
+    if(id=='notifs') App.renderNotifs();
+};
+
+window.onload = () => App.init();
+</script>
+</body>
+</html>
